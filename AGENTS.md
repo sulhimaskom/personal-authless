@@ -4,6 +4,7 @@ Use this guide to contribute confidently to the Cloudflare-based MCP server host
 
 ## Project Structure & Module Organization
 - `src/index.ts`: entry point that registers MCP tools through the SDK.
+- `src/github-handler.ts`, `src/utils.ts`, `src/workers-oauth-utils.ts`: GitHub OAuth handshake routes, helpers, and approval UI.
 - `wrangler.jsonc` and `worker-configuration.d.ts`: Worker runtime config and generated types.
 - `biome.json`, `tsconfig.json`, and `package.json`: shared tooling settings; keep updates minimal and well documented.
 Place new source modules under `src/` and co-locate helper utilities or schemas near their consumers for quicker discovery.
@@ -25,4 +26,4 @@ There is no dedicated test runner yet; rely on `npm run type-check`, targeted un
 Write concise, imperative commit messages (e.g., "Add calculator tool binding"). For PRs, describe the change, list verification steps (commands run, manual checks), link related issues, and attach screenshots or logs if behavior is user-visible. Ensure CI passes locally before requesting review.
 
 ## Security & Configuration Tips
-Do not commit secrets or account identifiers. Use `wrangler secret put <NAME>` to inject credentials at deploy time, and prefer environment variables for local testing. Review Cloudflare access levels before deploying new tools to avoid exposing privileged operations.
+Do not commit secrets or account identifiers. Store `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `COOKIE_ENCRYPTION_KEY` via `wrangler secret put` and mirror them in `.dev.vars` for local work. Review Cloudflare access levels before deploying new tools to avoid exposing privileged operations, and update the `OAUTH_KV` binding IDs in `wrangler.jsonc` whenever you recreate the namespace.

@@ -8,6 +8,15 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-03-10",
 	"compatibility_flags": ["nodejs_compat"],
+	"dev": {
+		"port": 8788
+	},
+	/**
+	 * Secrets you must configure before deploying:
+	 * wrangler secret put GITHUB_CLIENT_ID
+	 * wrangler secret put GITHUB_CLIENT_SECRET
+	 * wrangler secret put COOKIE_ENCRYPTION_KEY
+	 */
 	"migrations": [
 		{
 			"new_sqlite_classes": ["MyMCP"],
@@ -22,6 +31,13 @@
 			}
 		]
 	},
+	"kv_namespaces": [
+		{
+			"binding": "OAUTH_KV",
+			"id": "<replace-with-production-kv-id>",
+			"preview_id": "<replace-with-preview-kv-id>"
+		}
+	],
 	"observability": {
 		"enabled": true
 	}
