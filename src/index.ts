@@ -1,71 +1,81 @@
-import { McpAgent } from "agents/mcp";
+import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpAgent } from "agents/mcp";
+import { Octokit } from "octokit";
 import { z } from "zod";
+import { GitHubHandler } from "./github-handler";
+import type { Props } from "./utils";
 
-// Define our MCP agent with tools
-export class MyMCP extends McpAgent {
+// Durable MCP instance that is bootstrapped once per authenticated session
+export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 	server = new McpServer({
-		name: "Authless Calculator",
+		name: "GitHub Tools",
 		version: "1.0.0",
 	});
 
 	async init() {
-		// Simple addition tool
-		this.server.tool("add", { a: z.number(), b: z.number() }, async ({ a, b }) => ({
-			content: [{ type: "text", text: String(a + b) }],
-		}));
+		const session = this.props;
+		if (!session) {
+			throw new Error("Missing OAuth session context");
+		}
 
-		// Calculator tool with multiple operations
+		const octokit = new Octokit({ auth: session.accessToken });
+
 		this.server.tool(
-			"calculate",
+			"list_user_repos",
+			"List public repositories for a GitHub username using the authenticated session.",
 			{
-				operation: z.enum(["add", "subtract", "multiply", "divide"]),
-				a: z.number(),
-				b: z.number(),
+				username: z
+					.string()
+					.describe("GitHub username to inspect; defaults to the signed-in user when omitted.")
+					.optional(),
 			},
-			async ({ operation, a, b }) => {
-				let result: number;
-				switch (operation) {
-					case "add":
-						result = a + b;
-						break;
-					case "subtract":
-						result = a - b;
-						break;
-					case "multiply":
-						result = a * b;
-						break;
-					case "divide":
-						if (b === 0)
-							return {
-								content: [
-									{
-										type: "text",
-										text: "Error: Cannot divide by zero",
-									},
-								],
-							};
-						result = a / b;
-						break;
-				}
-				return { content: [{ type: "text", text: String(result) }] };
+			async ({ username }) => {
+				const target = username ?? session.login;
+				const repos = await octokit.paginate(octokit.rest.repos.listForUser, {
+					per_page: 100,
+					username: target,
+				});
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Found ${repos.length} repositories for ${target}:\n${repos
+								.map((repo) => repo.name)
+								.sort((a, b) => a.localeCompare(b))
+								.join("\n")}`,
+						},
+					],
+				};
+			},
+		);
+
+		this.server.tool(
+			"whoami",
+			"Return the GitHub profile associated with the current OAuth session.",
+			{},
+			async () => {
+				const profile = await octokit.rest.users.getAuthenticated();
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(profile.data, null, 2),
+						},
+					],
+				};
 			},
 		);
 	}
 }
 
-export default {
-	fetch(request: Request, env: Env, ctx: ExecutionContext) {
-		const url = new URL(request.url);
-
-		if (url.pathname === "/sse" || url.pathname === "/sse/message") {
-			return MyMCP.serveSSE("/sse").fetch(request, env, ctx);
-		}
-
-		if (url.pathname === "/mcp") {
-			return MyMCP.serve("/mcp").fetch(request, env, ctx);
-		}
-
-		return new Response("Not found", { status: 404 });
+export default new OAuthProvider({
+	apiHandlers: {
+		"/sse": MyMCP.serveSSE("/sse"),
+		"/mcp": MyMCP.serve("/mcp"),
 	},
-};
+	authorizeEndpoint: "/authorize",
+	clientRegistrationEndpoint: "/register",
+	defaultHandler: GitHubHandler as any,
+	tokenEndpoint: "/token",
+});
