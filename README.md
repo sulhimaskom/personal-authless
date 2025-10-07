@@ -1,50 +1,66 @@
-# Building a Remote MCP Server on Cloudflare (Without Auth)
+### Project Overview
 
-This example allows you to deploy a remote MCP server that doesn't require authentication on Cloudflare Workers. 
+This project is a Cloudflare Worker that implements a remote MCP (Model Context Protocol) server. It's designed to be deployed on Cloudflare's serverless platform and provides a set of tools that can be accessed by an MCP client, such as the Cloudflare AI Playground or Claude Desktop. The server is "authless," meaning it doesn't require any authentication to use its tools.
 
-## Get started: 
+The core logic is in `src/index.ts`, which defines an `McpAgent` with a tool for interacting with GitHub. The server uses Cloudflare Durable Objects to maintain the state of the MCP agent.
 
-[![Deploy to Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/ai/tree/main/demos/remote-mcp-authless)
+The project is written in TypeScript and uses `wrangler` for development and deployment. It also includes configuration for `biome` for linting and formatting, and `tsc` for type-checking.
 
-This will deploy your MCP server to a URL like: `remote-mcp-server-authless.<your-account>.workers.dev/sse`
+### Available Tools
 
-Alternatively, you can use the command line below to get the remote MCP Server created on your local machine:
+#### `list_user_repos`
+
+*   **Function**: Lists the public repositories for a given GitHub user.
+*   **Parameters**:
+    *   `username` (string): The GitHub username to fetch repositories for.
+*   **Example Usage**: `list_user_repos(username: "google")`
+
+### Building and Running
+
+**Dependencies:**
+
+*   Node.js and npm
+*   Wrangler CLI
+
+**Installation:**
+
 ```bash
-npm create cloudflare@latest -- my-mcp-server --template=cloudflare/ai/demos/remote-mcp-authless
+npm install
 ```
 
-## Customizing your MCP Server
+**Running in Development:**
 
-To add your own [tools](https://developers.cloudflare.com/agents/model-context-protocol/tools/) to the MCP server, define each tool inside the `init()` method of `src/index.ts` using `this.server.tool(...)`. 
+To run the worker locally, you need to create a `.dev.vars` file in the root of the project and add your GitHub personal access token:
 
-## Connect to Cloudflare AI Playground
-
-You can connect to your MCP server from the Cloudflare AI Playground, which is a remote MCP client:
-
-1. Go to https://playground.ai.cloudflare.com/
-2. Enter your deployed MCP server URL (`remote-mcp-server-authless.<your-account>.workers.dev/sse`)
-3. You can now use your MCP tools directly from the playground!
-
-## Connect Claude Desktop to your MCP server
-
-You can also connect to your remote MCP server from local MCP clients, by using the [mcp-remote proxy](https://www.npmjs.com/package/mcp-remote). 
-
-To connect to your MCP server from Claude Desktop, follow [Anthropic's Quickstart](https://modelcontextprotocol.io/quickstart/user) and within Claude Desktop go to Settings > Developer > Edit Config.
-
-Update with this configuration:
-
-```json
-{
-  "mcpServers": {
-    "calculator": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "http://localhost:8787/sse"  // or remote-mcp-server-authless.your-account.workers.dev/sse
-      ]
-    }
-  }
-}
+```
+GITHUB_TOKEN="your_github_token_here"
 ```
 
-Restart Claude and you should see the tools become available. 
+Then, run the following command:
+
+```bash
+npm run dev
+```
+
+This will start a local development server at `http://localhost:8787`.
+
+**Deploying to Cloudflare:**
+
+Before deploying, you need to set the `GITHUB_TOKEN` as a secret in your Cloudflare Worker's settings.
+
+1.  Go to your Worker in the Cloudflare dashboard.
+2.  Navigate to **Settings** > **Variables**.
+3.  Under **Environment Variables**, add a secret variable named `GITHUB_TOKEN` with your GitHub token as the value.
+
+After setting the secret, deploy the worker:
+
+```bash
+npm run deploy
+```
+
+### Development Conventions
+
+*   **Code Style:** The project uses Biome for code formatting and linting. The configuration is in `biome.json`.
+*   **Typing:** The project uses TypeScript with strict mode enabled. The configuration is in `tsconfig.json`.
+*   **API Interaction**: The project uses the native `fetch` API to interact with the GitHub API. No external libraries like `@octokit/rest` are required.
+*   **Authentication**: A GitHub personal access token is required for API authentication. This is managed through the `GITHUB_TOKEN` environment variable.

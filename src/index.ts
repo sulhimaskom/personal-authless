@@ -5,57 +5,57 @@ import { z } from "zod";
 // Define our MCP agent with tools
 export class MyMCP extends McpAgent {
 	server = new McpServer({
-		name: "Authless Calculator",
+		name: "GitHub Tools",
 		version: "1.0.0",
 	});
 
-	async init() {
-		// Simple addition tool
-		this.server.tool("add", { a: z.number(), b: z.number() }, async ({ a, b }) => ({
-			content: [{ type: "text", text: String(a + b) }],
-		}));
-
-		// Calculator tool with multiple operations
+	async init(env: Env) {
+		// Tool to list user repositories
 		this.server.tool(
-			"calculate",
+			"list_user_repos",
 			{
-				operation: z.enum(["add", "subtract", "multiply", "divide"]),
-				a: z.number(),
-				b: z.number(),
+				username: z.string().describe("The GitHub username to fetch repositories for."),
 			},
-			async ({ operation, a, b }) => {
-				let result: number;
-				switch (operation) {
-					case "add":
-						result = a + b;
-						break;
-					case "subtract":
-						result = a - b;
-						break;
-					case "multiply":
-						result = a * b;
-						break;
-					case "divide":
-						if (b === 0)
-							return {
-								content: [
-									{
-										type: "text",
-										text: "Error: Cannot divide by zero",
-									},
-								],
-							};
-						result = a / b;
-						break;
+			async ({ username }) => {
+				try {
+					const response = await fetch(`https://api.github.com/users/${username}/repos`, {
+						headers: {
+							"User-Agent": "Gemini-MCP-Agent",
+							"Authorization": `Bearer ${env.GITHUB_TOKEN}`,
+						},
+					});
+
+					if (!response.ok) {
+						throw new Error(`GitHub API responded with ${response.status}`);
+					}
+
+					const repos = await response.json() as any[];
+					const repoNames = repos.map((repo) => repo.name);
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Found ${repoNames.length} repositories for ${username}:\n${repoNames.join("\n")}`,
+							},
+						],
+					};
+				} catch (error: any) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Error fetching repositories for ${username}: ${error.message}`,
+							},
+						],
+					};
 				}
-				return { content: [{ type: "text", text: String(result) }] };
 			},
 		);
 	}
 }
 
 export default {
-	fetch(request: Request, env: Env, ctx: ExecutionContext) {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/sse" || url.pathname === "/sse/message") {
